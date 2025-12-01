@@ -1,0 +1,16 @@
+{
+  "name": "@massa-chat/contracts",
+  "version": "1.0.0",
+  "scripts": {
+    "asbuild": "asc src/index.ts --target release --outFile build/chat_contract.wasm"
+  },
+  "dependencies": {
+    "@massalabs/massa-as-sdk": "^1.0.0",
+    "@massalabs/as": "^1.0.0"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.0"
+  }
+}
+
+

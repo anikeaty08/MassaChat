@@ -1,0 +1,15 @@
+{
+  "name": "@massa-chat/indexer",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@massalabs/massa-web3": "^5.3.0",
+    "dotenv": "^16.4.5"
+  },
+  "type": "module"
+}

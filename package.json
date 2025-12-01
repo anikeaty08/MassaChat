@@ -1,0 +1,30 @@
+{
+  "name": "massa-chat-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:contracts": "npm run asbuild -w contracts",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:pinata-proxy": "npm run dev -w services/pinata-proxy",
+    "dev:indexer": "npm run dev -w services/indexer",
+    "deploy:sc": "node --experimental-specifier-resolution=node scripts/deploy_sc.js",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@massalabs/massa-sc-deployer": "^2.2.0"
+  },
+  "workspaces": [
+    "contracts",
+    "apps/web",
+    "services/pinata-proxy",
+    "services/indexer"
+  ],
+  "devDependencies": {
+    "patch-package": "^8.0.1"
+  },
+  "overrides": {
+    "@massalabs/massa-web3": "^5.3.0",
+    "@massalabs/wallet-provider": "^3.3.0",
+    "esbuild": "^0.27.0"
+  }
+}

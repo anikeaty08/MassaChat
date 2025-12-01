@@ -1,0 +1,22 @@
+diff --git a/node_modules/@massalabs/massa-sc-deployer/dist/index.js b/node_modules/@massalabs/massa-sc-deployer/dist/index.js
+index f88aaa5..6a032e6 100644
+--- a/node_modules/@massalabs/massa-sc-deployer/dist/index.js
++++ b/node_modules/@massalabs/massa-sc-deployer/dist/index.js
+@@ -3,7 +3,7 @@ import { Args, ClientFactory, ProviderType, WalletClient, EOperationStatus, u64T
+ import { readFileSync } from 'fs';
+ import path from 'path';
+ import { fileURLToPath } from 'url';
+-import { calculateCoinsSent, calculateBytecodeSize, calculateMaxCoins, } from './utils';
++import { calculateCoinsSent, calculateBytecodeSize, calculateMaxCoins, } from './utils/index.js';
+ const MASSA_EXEC_ERROR = 'massa_execution_error';
+ /**
+  * Used to get the current file name
+diff --git a/node_modules/@massalabs/massa-sc-deployer/dist/utils/index.js b/node_modules/@massalabs/massa-sc-deployer/dist/utils/index.js
+index 6f80883..9384781 100644
+--- a/node_modules/@massalabs/massa-sc-deployer/dist/utils/index.js
++++ b/node_modules/@massalabs/massa-sc-deployer/dist/utils/index.js
+@@ -1,2 +1,2 @@
+-export { calculateMaxCoins, calculateBytecodeSize, calculateCoinsSent, } from './maxCoins';
++export { calculateMaxCoins, calculateBytecodeSize, calculateCoinsSent, } from './maxCoins.js';
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
