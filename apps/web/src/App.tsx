@@ -1,5 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { connectWallet, addMessage, getLastIndex, getMessage } from './lib/massa';
+import {
+  connectWallet,
+  addMessage,
+  getLastIndex,
+  getMessage,
+  registerProfile,
+  getProfileByAddress as getProfileByAddressOnChain,
+  getProfileByUsername as getProfileByUsernameOnChain,
+  setPrivacy,
+  getPrivacy,
+  setBlocked,
+  isBlocked,
+  touchLastSeen,
+  getLastSeen,
+  OnChainProfile,
+  OnChainPrivacy,
+} from './lib/massa';
 import {
   generateKeyPair,
   encodePublicKey,
@@ -7,7 +23,7 @@ import {
   encryptMessage,
   decryptMessage,
 } from './lib/crypto';
-import { uploadEncryptedPayload, fetchFromIPFS } from './lib/pinata';
+import { uploadEncryptedPayload, fetchFromIPFS, uploadJson } from './lib/pinata';
 
 type ChatMessage = {
   sender: string;
@@ -15,76 +31,44 @@ type ChatMessage = {
   timestamp: number;
 };
 
-const DEMO_CONV_ID = 'demo-conversation';
-const PROFILE_STORAGE_KEY = 'massaChatProfiles';
-
-type UserProfile = {
-  address: string;
-  name: string;
-  createdAt: number;
-};
-
-type ProfileStore = {
-  byAddress: Record<string, UserProfile>;
-  nameIndex: Record<string, string>;
-};
+const PROFILE_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
 
 type AppView = 'landing' | 'profile' | 'home' | 'chat';
 
-const emptyStore: ProfileStore = { byAddress: {}, nameIndex: {} };
+type UiProfile = {
+  address: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string;
+  createdAt: number;
+  updatedAt: number;
+};
 
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
+type UiPrivacy = OnChainPrivacy;
+
+type ActiveConversation = {
+  peer: UiProfile;
+  convId: string;
+};
+
+function conversationIdFor(a: string, b: string): string {
+  const [x, y] = [a, b].sort();
+  return `conv-${x}-${y}`;
 }
 
-function readProfileStore(): ProfileStore {
-  if (!isBrowser()) return emptyStore;
-  try {
-    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!raw) return emptyStore;
-    const parsed = JSON.parse(raw) as Partial<ProfileStore>;
-    return {
-      byAddress: parsed.byAddress ?? {},
-      nameIndex: parsed.nameIndex ?? {},
-    };
-  } catch {
-    return emptyStore;
-  }
-}
-
-function writeProfileStore(store: ProfileStore): void {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(store));
-}
-
-function getProfileByAddress(address: string): UserProfile | null {
-  const store = readProfileStore();
-  return store.byAddress[address] ?? null;
-}
-
-function isNameTaken(name: string, ownerAddress?: string | null): boolean {
-  const store = readProfileStore();
-  const key = name.toLowerCase();
-  const currentOwner = store.nameIndex[key];
-  return Boolean(currentOwner && currentOwner !== ownerAddress);
-}
-
-function saveProfile(profile: UserProfile): UserProfile {
-  const store = readProfileStore();
-  const nextStore: ProfileStore = {
-    byAddress: { ...store.byAddress, [profile.address]: profile },
-    nameIndex: { ...store.nameIndex, [profile.name.toLowerCase()]: profile.address },
+function mapProfile(raw: OnChainProfile | null): UiProfile | null {
+  if (!raw) return null;
+  const avatarUrl = raw.avatarCid ? `${PROFILE_GATEWAY}${raw.avatarCid}` : null;
+  return {
+    address: raw.address,
+    username: raw.username,
+    displayName: raw.displayName || raw.username || raw.address.slice(0, 10),
+    avatarUrl,
+    bio: raw.bio ?? '',
+    createdAt: Number(raw.createdAt ?? 0n),
+    updatedAt: Number(raw.updatedAt ?? 0n),
   };
-  writeProfileStore(nextStore);
-  return profile;
-}
-
-function findProfileByName(name: string): UserProfile | null {
-  const store = readProfileStore();
-  const key = name.toLowerCase();
-  const owner = store.nameIndex[key];
-  if (!owner) return null;
-  return store.byAddress[owner] ?? null;
 }
 
 export const App: React.FC = () => {
@@ -96,12 +80,23 @@ export const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [currentView, setCurrentView] = useState<AppView>('landing');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [profileNameInput, setProfileNameInput] = useState('');
+  const [profile, setProfile] = useState<UiProfile | null>(null);
+  const [profileUsername, setProfileUsername] = useState('');
+  const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [profileBio, setProfileBio] = useState('');
+  const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState<string | null>(null);
   const [profileError, setProfileError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState<UserProfile | null>(null);
+  const [searchResult, setSearchResult] = useState<UiProfile | null>(null);
   const [searchFeedback, setSearchFeedback] = useState<string | null>(null);
+  const [activeConversation, setActiveConversation] = useState<ActiveConversation | null>(null);
+  const [blockedInConversation, setBlockedInConversation] = useState(false);
+  const [privacy, setPrivacyState] = useState<UiPrivacy | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [remoteLastSeen, setRemoteLastSeen] = useState<string | null>(null);
 
   const myPublicKeyEncoded = useMemo(() => encodePublicKey(kp.publicKey), [kp.publicKey]);
 
@@ -109,10 +104,13 @@ export const App: React.FC = () => {
     try {
       setIsConnecting(true);
       const { account: addr } = await connectWallet();
-      const existingProfile = getProfileByAddress(addr);
+      const existingProfileRaw = await getProfileByAddressOnChain(addr);
+      const existingProfile = mapProfile(existingProfileRaw);
       setAccount(addr);
       if (existingProfile) {
         setProfile(existingProfile);
+        const priv = await getPrivacy(addr);
+        setPrivacyState(priv ?? { showLastSeen: true, showProfilePhoto: true, showBio: true });
         setCurrentView('home');
       } else {
         setProfile(null);
@@ -138,6 +136,11 @@ export const App: React.FC = () => {
     if (!messageInput.trim()) return;
 
     try {
+      if (activeConversation && blockedInConversation) {
+        alert('You have blocked this user. Unblock them in the chat header to send messages.');
+        return;
+      }
+
       setIsSending(true);
       const peerPk = decodePublicKey(peerPublicKey.trim());
 
@@ -151,9 +154,14 @@ export const App: React.FC = () => {
         createdAt: Date.now(),
       };
 
-      const { cid, ipfsUrl } = await uploadEncryptedPayload(payload);
+      const { cid } = await uploadEncryptedPayload(payload);
 
-      await addMessage(DEMO_CONV_ID, cid);
+      const convId =
+        activeConversation?.convId && profile && activeConversation.peer
+          ? activeConversation.convId
+          : 'demo-conversation';
+
+      await addMessage(convId, cid);
 
       setMessages((prev) => [
         ...prev,
@@ -170,10 +178,15 @@ export const App: React.FC = () => {
 
   const handleFetchMessages = async () => {
     try {
-      const lastIndex = await getLastIndex(DEMO_CONV_ID);
+      const convId =
+        activeConversation?.convId && profile && activeConversation.peer
+          ? activeConversation.convId
+          : 'demo-conversation';
+
+      const lastIndex = await getLastIndex(convId);
       const fetched: ChatMessage[] = [];
       for (let i = 1n; i <= lastIndex; i++) {
-        const msgJson = await getMessage(DEMO_CONV_ID, i);
+        const msgJson = await getMessage(convId, i);
         if (!msgJson) continue;
         const parsed = JSON.parse(msgJson) as { cid: string; sender: string; timestamp: number };
         const ipfsPayload = await fetchFromIPFS(`https://gateway.pinata.cloud/ipfs/${parsed.cid}`);
@@ -196,39 +209,76 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleCreateProfile = () => {
+  const handleCreateProfile = async () => {
     if (!account) {
       setProfileError('Connect your Massa wallet first.');
       return;
     }
 
-    const trimmed = profileNameInput.trim();
-    if (trimmed.length < 3) {
-      setProfileError('Pick a name with at least 3 characters.');
+    const username = profileUsername.trim();
+    const displayName = profileDisplayName.trim() || username;
+    const bio = profileBio.trim();
+
+    if (username.length < 3) {
+      setProfileError('Pick a username with at least 3 characters.');
       return;
     }
-    if (trimmed.length > 24) {
-      setProfileError('Name cannot exceed 24 characters.');
+    if (username.length > 24) {
+      setProfileError('Username cannot exceed 24 characters.');
       return;
     }
-    if (!/^[a-z0-9_\-\s]+$/i.test(trimmed)) {
-      setProfileError('Use letters, numbers, spaces, underscores or dashes only.');
-      return;
-    }
-    if (isNameTaken(trimmed, account)) {
-      setProfileError('That name is already taken. Try another one.');
+    if (!/^[a-z0-9_\-]+$/i.test(username)) {
+      setProfileError('Usernames can only contain letters, numbers, underscores or dashes (no spaces).');
       return;
     }
 
-    const newProfile = saveProfile({
-      address: account,
-      name: trimmed,
-      createdAt: Date.now(),
-    });
-    setProfile(newProfile);
-    setSearchResult(null);
+    setProfileSaving(true);
     setProfileError('');
-    setCurrentView('home');
+    try {
+      if (profileUsername) {
+        const existingByUsername = await getProfileByUsernameOnChain(username);
+        if (existingByUsername && existingByUsername.address !== account) {
+          setProfileError('That username is already taken. Try another one.');
+          setUsernameStatus('taken');
+          return;
+        }
+      }
+
+      let avatarCid = '';
+      if (profileAvatarFile) {
+        const fileData = await profileAvatarFile.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(fileData)));
+        const mime = profileAvatarFile.type || 'image/png';
+        const { cid } = await uploadJson({
+          type: 'avatar',
+          mime,
+          data: base64,
+        });
+        avatarCid = cid;
+      }
+
+      await registerProfile({
+        ownerAddress: account,
+        username,
+        displayName,
+        avatarCid,
+        bio,
+      });
+
+      const fresh = await getProfileByAddressOnChain(account);
+      const mapped = mapProfile(fresh);
+      if (mapped) {
+        setProfile(mapped);
+      }
+      setSearchResult(null);
+      setUsernameStatus('available');
+      setCurrentView('home');
+    } catch (err) {
+      console.error(err);
+      setProfileError('Failed to save profile on-chain. Please try again.');
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const handleSearchProfiles = (event?: React.FormEvent) => {
@@ -239,18 +289,28 @@ export const App: React.FC = () => {
       setSearchFeedback('Type a name to search.');
       return;
     }
-    const found = findProfileByName(query);
-    if (!found) {
-      setSearchResult(null);
-      setSearchFeedback(`No profile found for "${query}".`);
-      return;
-    }
-    setSearchResult(found);
-    setSearchFeedback(null);
+    (async () => {
+      try {
+        const foundRaw = await getProfileByUsernameOnChain(query);
+        const found = mapProfile(foundRaw);
+        if (!found) {
+          setSearchResult(null);
+          setSearchFeedback(`No profile found for "${query}".`);
+          return;
+        }
+        setSearchResult(found);
+        setSearchFeedback(null);
+      } catch (err) {
+        console.error(err);
+        setSearchFeedback('Search failed. Please try again.');
+      }
+    })();
   };
 
   const handleNavigateToChat = () => {
-    if (!account || !profile) return;
+    if (!account || !profile || !searchResult) return;
+    const convId = conversationIdFor(account, searchResult.address);
+    setActiveConversation({ peer: searchResult, convId });
     setCurrentView('chat');
   };
 
@@ -259,10 +319,10 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (account) {
+    if (account && activeConversation) {
       handleFetchMessages().catch(console.error);
     }
-  }, [account]);
+  }, [account, activeConversation]);
 
   useEffect(() => {
     if (!account) {
@@ -270,27 +330,95 @@ export const App: React.FC = () => {
       setCurrentView('landing');
       return;
     }
-    const existing = getProfileByAddress(account);
-    if (existing) {
-      setProfile(existing);
-      setCurrentView((prev) => (prev === 'chat' ? 'chat' : 'home'));
-    } else {
-      setProfile(null);
-      setCurrentView('profile');
-    }
+    (async () => {
+      const existingRaw = await getProfileByAddressOnChain(account);
+      const existing = mapProfile(existingRaw);
+      if (existing) {
+        setProfile(existing);
+        const priv = await getPrivacy(account);
+        setPrivacyState(priv ?? { showLastSeen: true, showProfilePhoto: true, showBio: true });
+        setCurrentView((prev) => (prev === 'chat' ? 'chat' : 'home'));
+      } else {
+        setProfile(null);
+        setCurrentView('profile');
+      }
+    })().catch(console.error);
   }, [account]);
 
   useEffect(() => {
-    if (currentView === 'profile' && profile?.name) {
-      setProfileNameInput(profile.name);
+    if (currentView === 'profile' && profile?.username) {
+      setProfileUsername(profile.username);
+      setProfileDisplayName(profile.displayName);
+      setProfileBio(profile.bio);
     }
     if (currentView !== 'profile') {
       setProfileError('');
     }
     if (currentView !== 'chat') {
       setSearchResult(null);
+      setActiveConversation(null);
+      setBlockedInConversation(false);
     }
   }, [currentView, profile]);
+
+  useEffect(() => {
+    if (!account) return;
+    touchLastSeen(account).catch(console.error);
+  }, [account]);
+
+  useEffect(() => {
+    if (!activeConversation) {
+      setRemoteLastSeen(null);
+      return;
+    }
+    (async () => {
+      const raw = await getLastSeen(activeConversation.peer.address);
+      if (!raw) {
+        setRemoteLastSeen(null);
+        return;
+      }
+      const millis = Number(raw);
+      if (!millis) {
+        setRemoteLastSeen(null);
+        return;
+      }
+      setRemoteLastSeen(new Date(millis).toLocaleString());
+    })().catch(console.error);
+  }, [activeConversation]);
+
+  const handleToggleBlock = async () => {
+    if (!account || !activeConversation) return;
+    const target = activeConversation.peer.address;
+    try {
+      await setBlocked(account, target, !blockedInConversation);
+      const nowBlocked = await isBlocked(account, target);
+      setBlockedInConversation(nowBlocked);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update block status.');
+    }
+  };
+
+  const handlePrivacyChange = async (partial: Partial<UiPrivacy>) => {
+    if (!account) return;
+    const next: UiPrivacy = {
+      showLastSeen: partial.showLastSeen ?? privacy?.showLastSeen ?? true,
+      showProfilePhoto: partial.showProfilePhoto ?? privacy?.showProfilePhoto ?? true,
+      showBio: partial.showBio ?? privacy?.showBio ?? true,
+    };
+    setPrivacyState(next);
+    try {
+      await setPrivacy({
+        ownerAddress: account,
+        showLastSeen: next.showLastSeen,
+        showProfilePhoto: next.showProfilePhoto,
+        showBio: next.showBio,
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update privacy settings.');
+    }
+  };
 
   const renderLandingView = () => (
     <header className="hero">
@@ -343,17 +471,64 @@ export const App: React.FC = () => {
           Pick a short, searchable name so friends can find you. It links to your connected Massa address.
         </p>
         <label>
-          Display name
+          Username
           <input
             type="text"
-            value={profileNameInput}
-            onChange={(e) => setProfileNameInput(e.target.value)}
+            value={profileUsername}
+            onChange={(e) => {
+              setProfileUsername(e.target.value);
+              setUsernameStatus(null);
+            }}
             placeholder="e.g. neonfox"
           />
         </label>
+        <label>
+          Display name
+          <input
+            type="text"
+            value={profileDisplayName}
+            onChange={(e) => setProfileDisplayName(e.target.value)}
+            placeholder="How your name appears in chats"
+          />
+        </label>
+        <label>
+          Bio
+          <textarea
+            value={profileBio}
+            onChange={(e) => setProfileBio(e.target.value)}
+            placeholder="Say something about yourself"
+          />
+        </label>
+        <label>
+          Profile picture
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setProfileAvatarFile(file);
+              if (file) {
+                const url = URL.createObjectURL(file);
+                setProfileAvatarPreview(url);
+              } else {
+                setProfileAvatarPreview(null);
+              }
+            }}
+          />
+        </label>
+        {profileAvatarPreview && (
+          <div className="avatar-preview">
+            <img src={profileAvatarPreview} alt="Avatar preview" />
+          </div>
+        )}
+        {usernameStatus && (
+          <div className={`username-status ${usernameStatus === 'available' ? 'ok' : 'error'}`}>
+            {usernameStatus === 'available' ? 'Username is available' : 'Username already in use'}
+          </div>
+        )}
         {profileError && <div className="form-error">{profileError}</div>}
-        <button className="btn-primary" onClick={handleCreateProfile} disabled={!account}>
-          Save profile
+        <button className="btn-primary" onClick={handleCreateProfile} disabled={!account || profileSaving}>
+          {profileSaving ? 'Saving…' : 'Save profile'}
         </button>
       </div>
     </div>
@@ -363,17 +538,21 @@ export const App: React.FC = () => {
     <div className="home-grid">
       <section className="home-panel">
         <p className="eyebrow">Welcome back</p>
-        <h2>{profile ? `Hey ${profile.name} 👋` : 'You are connected'}</h2>
+        <h2>{profile ? `Hey ${profile.displayName} 👋` : 'You are connected'}</h2>
         <p className="muted">
           Manage your encrypted chats, discover friends by their MassaChat names, and jump into the secure messenger
           whenever you&apos;re ready.
         </p>
         <div className="home-actions">
-          <button className="btn-primary" onClick={handleNavigateToChat} disabled={!account || !profile}>
-            Open secure chat
+          <button
+            className="btn-primary"
+            onClick={handleNavigateToChat}
+            disabled={!account || !profile || !searchResult}
+          >
+            Open chat
           </button>
-          <button className="btn-secondary" onClick={() => setCurrentView('landing')}>
-            View landing
+          <button className="btn-secondary" onClick={() => setSettingsOpen(true)}>
+            Privacy &amp; settings
           </button>
         </div>
         <ul className="home-feature-list">
@@ -385,7 +564,7 @@ export const App: React.FC = () => {
       <aside className="profile-summary">
         <div className="profile-row">
           <span className="label">Chat name</span>
-          <strong>{profile?.name ?? 'Not set'}</strong>
+          <strong>{profile?.username ?? 'Not set'}</strong>
         </div>
         <div className="profile-row">
           <span className="label">Wallet</span>
@@ -408,15 +587,12 @@ export const App: React.FC = () => {
           {searchResult && (
             <div className="search-result">
               <p>
-                <strong>{searchResult.name}</strong> · {searchResult.address.slice(0, 8)}…
-                {searchResult.address.slice(-6)}
+                <strong>{searchResult.displayName}</strong> · @{searchResult.username} ·{' '}
+                {searchResult.address.slice(0, 8)}…{searchResult.address.slice(-6)}
               </p>
               <p className="muted">
-                Ask them for their encrypted chat key, then paste it inside the conversation composer.
+                Tap &quot;Open chat&quot; above to start an encrypted conversation.
               </p>
-              <button className="text-link" onClick={() => setCurrentView('chat')}>
-                Go to chat
-              </button>
             </div>
           )}
         </div>
@@ -430,7 +606,9 @@ export const App: React.FC = () => {
         <button className="btn-secondary" onClick={handleBackToHome}>
           ← Back to home
         </button>
-        <div className="wallet-pill">{profile ? `${profile.name} · ${account?.slice(-6)}` : account}</div>
+        <div className="wallet-pill">
+          {profile ? `${profile.displayName} · @${profile.username}` : account}
+        </div>
       </div>
       <header className="hero">
         <div className="hero-left">
@@ -465,9 +643,9 @@ export const App: React.FC = () => {
             <button className="btn-primary" onClick={handleConnectWallet} disabled={isConnecting}>
               {account ? 'Wallet Connected' : isConnecting ? 'Connecting…' : 'Connect Massa Wallet'}
             </button>
-            {account && (
+            {activeConversation && (
               <span className="wallet-pill">
-                {account.slice(0, 8)}…{account.slice(-6)}
+                Chatting with {activeConversation.peer.displayName} (@{activeConversation.peer.username})
               </span>
             )}
           </div>
@@ -479,14 +657,34 @@ export const App: React.FC = () => {
             <div className="phone-screen">
               <div className="phone-header">
                 <div>
-                  <div className="chat-name">Demo Conversation</div>
+                  <div className="chat-name">
+                    {activeConversation
+                      ? activeConversation.peer.displayName
+                      : 'Demo Conversation'}
+                  </div>
                   <div className="chat-status">
-                    {account ? 'Secure • Encrypted by Massa' : 'Connect wallet to start'}
+                    {activeConversation && remoteLastSeen
+                      ? `Last seen ${remoteLastSeen}`
+                      : account
+                      ? 'Secure • Encrypted by Massa'
+                      : 'Connect wallet to start'}
                   </div>
                 </div>
                 <div className="chat-actions">
-                  <span title="Voice call">📞</span>
-                  <span title="Video call">🎥</span>
+                  <button className="icon-button" title="Voice call (coming soon)" type="button">
+                    📞
+                  </button>
+                  <button className="icon-button" title="Video call (coming soon)" type="button">
+                    🎥
+                  </button>
+                  <button
+                    className="icon-button danger"
+                    type="button"
+                    onClick={handleToggleBlock}
+                    title={blockedInConversation ? 'Unblock user' : 'Block user'}
+                  >
+                    {blockedInConversation ? '🚫' : '⛔'}
+                  </button>
                 </div>
               </div>
 
@@ -554,6 +752,41 @@ export const App: React.FC = () => {
       <div className="bg-orb orb-2" />
       <div className="bg-orb orb-3" />
       {viewContent}
+      {settingsOpen && privacy && (
+        <div className="settings-overlay" onClick={() => setSettingsOpen(false)}>
+          <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+            <h3>Privacy &amp; visibility</h3>
+            <p className="muted">Control what others can see about you.</p>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={privacy.showLastSeen}
+                onChange={(e) => handlePrivacyChange({ showLastSeen: e.target.checked })}
+              />
+              <span>Show my last seen</span>
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={privacy.showProfilePhoto}
+                onChange={(e) => handlePrivacyChange({ showProfilePhoto: e.target.checked })}
+              />
+              <span>Show my profile picture</span>
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={privacy.showBio}
+                onChange={(e) => handlePrivacyChange({ showBio: e.target.checked })}
+              />
+              <span>Show my bio</span>
+            </label>
+            <button className="btn-secondary" onClick={() => setSettingsOpen(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

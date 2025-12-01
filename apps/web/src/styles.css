@@ -558,4 +558,79 @@ body {
   }
 }
 
+.profile-card textarea {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 255, 0.4);
+  background: rgba(2, 6, 23, 0.8);
+  color: #fff;
+  padding: 0.75rem 1.1rem;
+  font-size: 0.95rem;
+  min-height: 72px;
+}
+
+.avatar-preview {
+  margin: 0.5rem 0 0.8rem;
+}
+
+.avatar-preview img {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid rgba(129, 140, 248, 0.8);
+}
+
+.username-status {
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.username-status.ok {
+  color: #bbf7d0;
+}
+
+.username-status.error {
+  color: #fecdd3;
+}
+
+.icon-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  margin-left: 0.35rem;
+  font-size: 1rem;
+}
+
+.icon-button.danger {
+  color: #fecaca;
+}
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.settings-panel {
+  background: rgba(15, 23, 42, 0.98);
+  border-radius: 1.4rem;
+  padding: 1.6rem 1.8rem;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid rgba(129, 140, 248, 0.7);
+  box-shadow: 0 35px 80px rgba(3, 7, 18, 0.9);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.7rem 0;
+  font-size: 0.95rem;
+}
+
 

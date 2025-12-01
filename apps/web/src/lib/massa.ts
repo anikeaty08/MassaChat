@@ -7,7 +7,7 @@ import {
   SmartContract,
 } from '@massalabs/massa-web3';
 
-const CONTRACT_ADDRESS = import.meta.env.VITE_CHAT_CONTRACT_ADDRESS ?? '';
+const CONTRACT_ADDRESS: string = import.meta.env.VITE_CHAT_CONTRACT_ADDRESS ?? '';
 const PRIVATE_KEY = import.meta.env.VITE_MASSA_PRIVATE_KEY ?? '';
 
 type WalletAccount = {
@@ -30,7 +30,7 @@ let cachedAccount: WalletAccount | null = null;
 let cachedWriteContract: SmartContract | null = null;
 let cachedReadContract: SmartContract | null = null;
 
-function ensureContractAddress(): asserts CONTRACT_ADDRESS is string {
+function ensureContractAddress(): void {
   if (!CONTRACT_ADDRESS) {
     throw new Error('VITE_CHAT_CONTRACT_ADDRESS is not set');
   }
