@@ -1,8 +1,12 @@
 diff --git a/node_modules/@massalabs/massa-sc-deployer/dist/index.js b/node_modules/@massalabs/massa-sc-deployer/dist/index.js
-index f88aaa5..6a032e6 100644
+index f88aaa5..4e4c99d 100644
 --- a/node_modules/@massalabs/massa-sc-deployer/dist/index.js
 +++ b/node_modules/@massalabs/massa-sc-deployer/dist/index.js
-@@ -3,7 +3,7 @@ import { Args, ClientFactory, ProviderType, WalletClient, EOperationStatus, u64T
+@@ -1,9 +1,10 @@
+ /* eslint-disable no-console */
+-import { Args, ClientFactory, ProviderType, WalletClient, EOperationStatus, u64ToBytes, u8toByte, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR, EventPoller, toMAS, utils, } from '@massalabs/massa-web3';
++import massaWeb3 from '@massalabs/massa-web3';
++const { Args, ClientFactory, ProviderType, WalletClient, EOperationStatus, u64ToBytes, u8toByte, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR, EventPoller, toMAS, utils, } = massaWeb3;
  import { readFileSync } from 'fs';
  import path from 'path';
  import { fileURLToPath } from 'url';
@@ -20,3 +24,14 @@ index 6f80883..9384781 100644
 +export { calculateMaxCoins, calculateBytecodeSize, calculateCoinsSent, } from './maxCoins.js';
  //# sourceMappingURL=index.js.map
 \ No newline at end of file
+diff --git a/node_modules/@massalabs/massa-sc-deployer/dist/utils/maxCoins.js b/node_modules/@massalabs/massa-sc-deployer/dist/utils/maxCoins.js
+index 270d5ad..1e01f34 100644
+--- a/node_modules/@massalabs/massa-sc-deployer/dist/utils/maxCoins.js
++++ b/node_modules/@massalabs/massa-sc-deployer/dist/utils/maxCoins.js
+@@ -1,4 +1,5 @@
+-import { BASE_ACCOUNT_CREATION_COST, STORAGE_BYTE_COST, } from '@massalabs/massa-web3';
++import massaWeb3 from '@massalabs/massa-web3';
++const { BASE_ACCOUNT_CREATION_COST, STORAGE_BYTE_COST, } = massaWeb3;
+ /**
+  * Estimates the value of the maxCoins maximum number of coins to that should be used while deploying a smart contract.
+  *

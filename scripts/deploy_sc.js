@@ -111,8 +111,7 @@ async function resolveChainId(publicApi, explicitChainId) {
 async function main() {
   loadDotEnv();
 
-  const { deploySC, WalletClient } = await import('@massalabs/massa-sc-deployer');
-  const { Args } = await import('@massalabs/massa-web3');
+  const { Account, Args, JsonRpcProvider, OperationStatus } = await import('@massalabs/massa-web3');
 
   const { positional, flags } = parseArgs(process.argv.slice(2));
   const wasmPathArg = positional[0] || 'contracts/build/chat_contract.wasm';
@@ -134,13 +133,9 @@ async function main() {
     NETWORK_ENDPOINTS[networkArg] ??
     DEFAULTS.publicApi;
 
-  const chainId = await resolveChainId(publicApi, flags.chainId);
-  const account = await WalletClient.getAccountFromSecretKey(privateKey);
-  if (!account) {
-    throw new Error('Unable to derive account from provided private key');
-  }
-
   const wasmBytes = fs.readFileSync(wasmAbs);
+  const account = await Account.fromPrivateKey(privateKey);
+  const provider = JsonRpcProvider.fromRPCUrl(publicApi, account);
 
   const fee = readBigInt('fee', flags, 'MASSA_DEPLOY_FEE', DEFAULTS.fee);
   const maxGas = readBigInt('maxGas', flags, 'MASSA_DEPLOY_MAX_GAS', DEFAULTS.maxGas);
@@ -148,27 +143,26 @@ async function main() {
   const coins = readBigInt('coins', flags, 'MASSA_DEPLOY_COINS', DEFAULTS.coins);
 
   console.log(
-    `Deploying ${wasmAbs} to ${publicApi} (chainId ${chainId.toString()}) with fee=${fee} maxGas=${maxGas} maxCoins=${maxCoins ?? 'auto'} coins=${coins}`,
+    `Deploying ${wasmAbs} to ${publicApi} with fee=${fee} maxGas=${maxGas} maxCoins=${maxCoins ?? 'auto'} coins=${coins}`,
   );
 
-  const deployment = await deploySC(
-    publicApi,
-    account,
-    [
-      {
-        data: new Uint8Array(wasmBytes),
-        coins,
-        args: new Args(),
-      },
-    ],
-    chainId,
+  const args = new Args();
+  const operation = await provider.deploy({
+    byteCode: new Uint8Array(wasmBytes),
+    parameter: args,
     fee,
     maxGas,
-    true,
+    coins,
     maxCoins,
-  );
+  });
 
-  console.log('Deployment complete:', deployment);
+  const status = await operation.waitFinalExecution();
+  if (status !== OperationStatus.Success) {
+    throw new Error(`Deployment failed with status ${status}`);
+  }
+
+  const deployedAddress = await operation.getDeployedAddress(true);
+  console.log('Deployment successful. Contract address:', deployedAddress);
 }
 
 main().catch((e) => {
