@@ -24,4 +24,8 @@ export async function fetchFromIPFS(ipfsUrl: string): Promise<any> {
   return res.json();
 }
 
+export async function uploadJson(payload: unknown): Promise<{ cid: string; ipfsUrl: string }> {
+  return uploadEncryptedPayload(payload);
+}
+
 

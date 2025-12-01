@@ -175,6 +175,33 @@ body {
   justify-content: center;
 }
 
+.hero-card {
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.9);
+  max-width: 320px;
+  line-height: 1.4;
+  font-size: 0.95rem;
+}
+
+.btn-secondary {
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 255, 0.4);
+  background: transparent;
+  color: #e5e7eb;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.btn-secondary:hover {
+  border-color: #f9fafb;
+  color: #fff;
+}
+
 .phone-frame {
   width: 320px;
   height: 620px;
@@ -355,6 +382,179 @@ body {
   .app-root {
     padding-top: 1.5rem;
     align-items: flex-start;
+  }
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+  color: #a5b4fc;
+  margin-bottom: 0.5rem;
+}
+
+.muted {
+  color: #cbd5f5;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.profile-flow {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 640px;
+}
+
+.profile-card {
+  background: rgba(6, 11, 27, 0.9);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  box-shadow: 0 40px 80px rgba(5, 7, 20, 0.8);
+}
+
+.profile-card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.profile-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1.2rem 0 1rem;
+  font-weight: 600;
+}
+
+.profile-card input {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 255, 0.4);
+  background: rgba(2, 6, 23, 0.8);
+  color: #fff;
+  padding: 0.75rem 1.1rem;
+  font-size: 1rem;
+}
+
+.form-error {
+  color: #fecdd3;
+  background: rgba(190, 18, 60, 0.2);
+  border-radius: 0.8rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.home-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+  gap: 2.5rem;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.home-panel {
+  background: rgba(6, 11, 27, 0.85);
+  border-radius: 1.6rem;
+  padding: 2.2rem;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  box-shadow: 0 35px 60px rgba(3, 7, 18, 0.8);
+}
+
+.home-panel h2 {
+  margin: 0;
+}
+
+.home-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1.5rem 0;
+}
+
+.home-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  color: #dbeafe;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.profile-summary {
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 1.5rem;
+  padding: 1.8rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.profile-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.label {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.search-card {
+  border-top: 1px solid rgba(148, 163, 255, 0.3);
+  padding-top: 1rem;
+}
+
+.search-card form {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0.8rem 0;
+}
+
+.search-card input {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 255, 0.4);
+  background: transparent;
+  color: #fff;
+  padding: 0.6rem 1rem;
+}
+
+.search-result {
+  border-radius: 1rem;
+  padding: 0.8rem 1rem;
+  background: rgba(79, 70, 229, 0.12);
+}
+
+.text-link {
+  background: none;
+  border: none;
+  color: #a5b4fc;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.view-header {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 960px) {
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
